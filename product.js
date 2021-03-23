@@ -1,183 +1,58 @@
-const Product = require("../models/product");
-const formidable = require("formidable");
-const _ = require("lodash");
-const fs = require("fs");
+const express = require("express");
+const router = express.Router();
 
-exports.getProductById = (req, res, next, id) => {
-  Product.findById(id)
-    .populate("category")
-    .exec((err, product) => {
-      if (err) {
-        return res.status(400).json({
-          error: "Product not found",
-        });
-      }
-      req.product = product;
-      next();
-    });
-};
+const {
+  getProductById,
+  createProduct,
+  getProduct,
+  photo,
+  updateProduct,
+  deleteProduct,
+  getAllProducts,
+  getAllUniqueCategories
+} = require("../controllers/product");
+const { isSignedIn, isAuthenticated, isAdmin } = require("../controllers/auth");
+const { getUserById } = require("../controllers/user");
 
-exports.createProduct = (req, res) => {
-  let form = new formidable.IncomingForm();
-  form.keepExtensions = true;
+//all of params
+router.param("userId", getUserById);
+router.param("productId", getProductById);
 
-  form.parse(req, (err, fields, file) => {
-    if (err) {
-      return res.status(400).json({
-        error: "problem with image",
-      });
-    }
-    //destructure the fields
-    const { name, description, price, category, stock } = fields;
+//all of actual routes
+//create route
+router.post(
+  "/product/create/:userId",
+  isSignedIn,
+  isAuthenticated,
+  isAdmin,
+  createProduct
+);
 
-    if (!name || !description || !price || !category || !stock) {
-      return res.status(400).json({
-        error: "Please include all fields",
-      });
-    }
+// read routes
+router.get("/product/:productId", getProduct);
+router.get("/product/photo/:productId", photo);
 
-    let product = new Product(fields);
+//delete route
+router.delete(
+  "/product/:productId/:userId",
+  isSignedIn,
+  isAuthenticated,
+  isAdmin,
+  deleteProduct
+);
 
-    //handle file here
-    if (file.photo) {
-      if (file.photo.size > 4000000) {
-        return res.status(400).json({
-          error: "File size too big!",
-        });
-      }
-      product.photo.data = fs.readFileSync(file.photo.path);
-      product.photo.contentType = file.photo.type;
-    }
-    // console.log(product);
+//update route
+router.put(
+  "/product/:productId/:userId",
+  isSignedIn,
+  isAuthenticated,
+  isAdmin,
+  updateProduct
+);
 
-    //save to the DB
-    product.save((err, product) => {
-      if (err) {
-        res.status(400).json({
-          error: "Saving tshirt in DB failed",
-        });
-      }
-      res.json(product);
-    });
-  });
-};
+//listing route
+router.get("/products", getAllProducts);
 
-exports.getProduct = (req, res) => {
-  req.product.photo = undefined;
-  return res.json(req.product);
-};
+router.get("/products/categories", getAllUniqueCategories);
 
-//middleware
-exports.photo = (req, res, next) => {
-  if (req.product.photo.data) {
-    res.set("Content-Type", req.product.photo.contentType);
-    return res.send(req.product.photo.data);
-  }
-  next();
-};
-
-// delete controllers
-exports.deleteProduct = (req, res) => {
-  let product = req.product;
-  product.remove((err, deletedProduct) => {
-    if (err) {
-      return res.status(400).json({
-        error: "Failed to delete the product",
-      });
-    }
-    res.json({
-      message: "Deletion was a success",
-      deletedProduct,
-    });
-  });
-};
-
-// delete controllers
-exports.updateProduct = (req, res) => {
-  let form = new formidable.IncomingForm();
-  form.keepExtensions = true;
-
-  form.parse(req, (err, fields, file) => {
-    if (err) {
-      return res.status(400).json({
-        error: "problem with image",
-      });
-    }
-
-    //updation code
-    let product = req.product;
-    product = _.extend(product, fields);
-
-    //handle file here
-    if (file.photo) {
-      if (file.photo.size > 3000000) {
-        return res.status(400).json({
-          error: "File size too big!",
-        });
-      }
-      product.photo.data = fs.readFileSync(file.photo.path);
-      product.photo.contentType = file.photo.type;
-    }
-    // console.log(product);
-
-    //save to the DB
-    product.save((err, product) => {
-      if (err) {
-        res.status(400).json({
-          error: "Updation of product failed",
-        });
-      }
-      res.json(product);
-    });
-  });
-};
-
-//product listing
-
-exports.getAllProducts = (req, res) => {
-  let sortBy = req.query.sortBy ? req.query.sortBy : "_id";
-
-  Product.find()
-    .select("-photo")
-    .populate("category")
-    .sort([[sortBy, "asc"]])
-    .exec((err, products) => {
-      if (err) {
-        return res.status(400).json({
-          error: "NO product FOUND",
-        });
-      }
-      res.json(products);
-    });
-};
-
-exports.getAllUniqueCategories = (req, res) => {
-  Product.distinct("category", {}, (err, category) => {
-    if (err) {
-      return res.status(400).json({
-        error: "NO category found",
-      });
-    }
-    res.json(category);
-  });
-};
-
-exports.updateStock = (req, res, next) => {
-  let myOperations = req.body.order.products.map((prod) => {
-    return {
-      updateOne: {
-        filter: { _id: prod._id },
-        update: { $inc: { stock: -prod.count, sold: +prod.count } },
-      },
-    };
-  });
-
-  Product.bulkWrite(myOperations, {}, (err, products) => {
-    if (err) {
-      return res.status(400).json({
-        error: "Bulk operation failed",
-      });
-    }
-    next();
-  });
-};
+module.exports = router;

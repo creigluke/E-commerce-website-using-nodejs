@@ -1,72 +1,52 @@
-const { Order, ProductCart } = require("../models/order");
+const express = require("express");
+const router = express.Router();
+const { isSignedIn, isAuthenticated, isAdmin } = require("../controllers/auth");
+const { getUserById, pushOrderInPurchaseList } = require("../controllers/user");
+const { updateStock } = require("../controllers/product");
 
-exports.getOrderById = (req, res, next, id) => {
-  Order.findById(id)
-    .populate("products.product", "name price")
-    .exec((err, order) => {
-      if (err) {
-        return res.status(400).json({
-          error: "NO order found in DB",
-        });
-      }
-      req.order = order;
-      next();
-    });
-};
+const {
+  getOrderById,
+  createOrder,
+  getAllOrders,
+  getOrderStatus,
+  updateStatus,
+  userPurchaseList,
+} = require("../controllers/order");
 
-exports.createOrder = (req, res) => {
-  req.body.order.user = req.profile;
-  const order = new Order(req.body.order);
-  console.log(order);
-  order.save((err, order) => {
-    if (err) {
-      return res.status(400).json({
-        error: "Failed to save your order in DB",
-      });
-    }
-    res.json(order);
-  });
-};
+router.param("userId", getUserById);
+router.param("orderId", getOrderById);
 
-exports.getAllOrders = (req, res) => {
-  Order.find()
-    .populate("user", "_id name phone email address")
-    .exec((err, order) => {
-      if (err) {
-        return res.status(400).json({
-          error: "No orders found in DB",
-        });
-      }
-      res.json(order);
-    });
-};
-exports.userPurchaseList = (req, res) => {
-  Order.find({ user: req.profile._id })
-    .populate("user", "_id address phone email")
-    .exec((err, order) => {
-      if (err) {
-        return res.status(400).json({
-          error: "No orders found in DB",
-        });
-      }
-      res.json(order);
-    });
-};
-exports.getOrderStatus = (req, res) => {
-  res.json(Order.schema.path("status").enumValues);
-};
+router.post(
+  "/order/create/:userId",
+  isSignedIn,
+  isAuthenticated,
+  createOrder,
+  pushOrderInPurchaseList,
+  updateStock
+);
 
-exports.updateStatus = (req, res) => {
-  Order.update(
-    { _id: req.body.orderId },
-    { $set: { status: req.body.status } },
-    (err, order) => {
-      if (err) {
-        return res.status(400).json({
-          error: "Cannot update order status",
-        });
-      }
-      res.json(order);
-    }
-  );
-};
+router.get(
+  "/order/all/:userId",
+  isSignedIn,
+  isAuthenticated,
+  isAdmin,
+  getAllOrders
+);
+router.get("/order/my/:userId", isSignedIn, isAuthenticated, userPurchaseList);
+
+router.get(
+  "/order/status/:userId",
+  isSignedIn,
+  isAuthenticated,
+  isAdmin,
+  getOrderStatus
+);
+router.put(
+  "/order/:orderId/status/:userId",
+  isSignedIn,
+  isAuthenticated,
+  isAdmin,
+  updateStatus
+);
+
+module.exports = router;

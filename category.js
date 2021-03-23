@@ -1,85 +1,45 @@
-const Category = require("../models/category");
+const express = require("express");
+const router = express.Router();
 
-exports.getCategoryById = (req, res, next, id) => {
-  Category.findById(id).exec((err, cate) => {
-    if (err) {
-      return res.status(400).json({
-        error: "Category not found in DB"
-      });
-    }
-    req.category = cate;
-    next();
-  });
-};
+const {
+  getCategoryById,
+  createCategory,
+  getCategory,
+  getAllCategory,
+  updateCategory,
+  removeCategory,
+} = require("../controllers/category");
+const { isSignedIn, isAdmin, isAuthenticated } = require("../controllers/auth");
+const { getUserById } = require("../controllers/user");
 
-exports.createCategory = (req, res) => {
-  const category = new Category(req.body);
-  category.save((err, category) => {
-    if (err) {
-      return res.status(400).json({
-        error: "NOT able to save category in DB"
-      });
-    }
-    res.json({ category });
-  });
-};
+router.param("userId", getUserById);
+router.param("categoryId", getCategoryById);
 
-exports.getCategory = (req, res) => {
-  return res.json(req.category);
-};
+router.post(
+  "/category/create/:userId",
+  isSignedIn,
+  isAuthenticated,
+  isAdmin,
+  createCategory
+);
 
-exports.getAllCategory = (req, res) => {
-  Category.find().exec((err, categories) => {
-    if (err) {
-      return res.status(400).json({
-        error: "NO categories found"
-      });
-    }
-    res.json(categories);
-  });
-};
-/*
-exports.updateCategory = (req, res) => {
-  const category = req.category;
-  category.name = req.body.name;
+router.get("/category/:categoryId", getCategory);
+router.get("/categories", getAllCategory);
 
-  category.save((err, category) => {
-    if (err) {
-      return res.status(400).json({
-        error: "Failed to update category"
-      });
-    }
-    res.json(category);
-  });
-};
-*/
-exports.updateCategory = (req, res) => {
-  Category.update(
-  { _id: req.category._id },
-  { $set: { name: req.body.name } },
-  { new: true },
-  (err,category) => {
-  if (err) {
-    return res.status(400).json({
-      error: "Failed to update category"
-    });
-  }
-  res.json(category);
-});
-};
+router.put(
+  "/category/:categoryId/:userId",
+  isSignedIn,
+  isAuthenticated,
+  isAdmin,
+  updateCategory
+);
 
+router.delete(
+  "/category/:categoryId/:userId",
+  isSignedIn,
+  isAuthenticated,
+  isAdmin,
+  removeCategory
+);
 
-exports.removeCategory = (req, res) => {
-  const category = req.category;
-
-  category.remove((err, category) => {
-    if (err) {
-      return res.status(400).json({
-        error: "Failed to delete this category"
-      });
-    }
-    res.json({
-      message: "Successfully deleted"
-    });
-  });
-};
+module.exports = router;
